@@ -2,7 +2,7 @@ from gym.envs.registration import register
 import sys
 
 print("path", sys.argv[0].split('/')[-1], "!!!")
-if sys.argv[0].split('/')[-1] in ["train.py"]:
+if sys.argv[0].split('/')[-1].split('\\')[-1] in ["train.py", "test1.py", "-c"]:
     from train import args
 else:
     raise Exception("Unknown main file !!!")

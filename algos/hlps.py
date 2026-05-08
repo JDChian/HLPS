@@ -212,6 +212,7 @@ class hlps_agent:
         output_data = {"frames": [], "reward": [], "dist": []}
 
         for epoch in range(self.start_epoch, self.args.n_epochs):
+            print("Epoch: ", epoch, "Furthest task: ", self.furthest_task)
             if epoch > 0 and epoch % self.args.lr_decay_actor == 0:
                 self.adjust_lr_actor(epoch)
             if epoch > 0 and epoch % self.args.lr_decay_critic == 0:
@@ -296,7 +297,8 @@ class hlps_agent:
                     else:
                         action = self.explore_policy(act_obs[:, :self.low_dim], hi_action_tensor)
                 # feed the actions into the environment
-                observation_new, r, _, info = self.env.step(action)
+                observation_new, r, terminated, truncated, info = self.env.step(action)
+                done = terminated or truncated
                 if info['is_success']:
                     done = True
                     # only record the first success
@@ -431,6 +433,7 @@ class hlps_agent:
 
         file_name = "{}_{}_{}".format(self.args.env_name, self.args.algo_name, self.args.seed)
         output_df = pd.DataFrame(output_data)
+        os.makedirs("./results", exist_ok=True)
         output_df.to_csv(os.path.join("./results", file_name+".csv"), float_format="%.4f", index=False)
 
     # pre_process the inputs
@@ -633,7 +636,8 @@ class hlps_agent:
                         hi_action_tensor = torch.tensor(new_hi_action, dtype=torch.float32).unsqueeze(0).to(self.device)
                     action = self.test_policy(act_obs[:, :self.low_dim], hi_action_tensor)
 
-                observation_new, rew, done, info = env.step(action)
+                observation_new, rew, terminated, truncated, info = env.step(action)
+                done = terminated or truncated
                 if self.animate:
                     env.render()
                 obs = observation_new['observation']

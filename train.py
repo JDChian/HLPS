@@ -24,16 +24,18 @@ def launch(args):
     print("test_env", test_env1, test_env2)
 
     # set random seeds for reproduce
-    env.seed(args.seed)
-    if args.env_name != "NChain-v1":
-        env.env.env.wrapped_env.seed(args.seed)
-        test_env.env.env.wrapped_env.seed(args.seed)
+    env.reset(seed=args.seed)
+    test_env.reset(seed=args.seed)
+    # env.seed(args.seed)
+    # if args.env_name != "NChain-v1":
+    #     env.env.env.wrapped_env.seed(args.seed)
+    #     test_env.env.env.wrapped_env.seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if args.device != 'cpu':
         torch.cuda.manual_seed(args.seed)
-    env.seed(args.seed)
+    # env.seed(args.seed)
     env.action_space.seed(args.seed)
 
     # gym.spaces.prng.seed(args.seed)

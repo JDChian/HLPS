@@ -95,7 +95,7 @@ class GoalWrapper(Wrapper):
         self.top_down = top_down
 
     def step(self, action):
-        observation, reward, _, info = self.env.step(action)
+        observation, reward, _, _, info = self.env.step(action)
         out = {'observation': observation,
                'desired_goal': self.goal,
                # 'achieved_goal': observation[..., 3:5]}
@@ -110,9 +110,9 @@ class GoalWrapper(Wrapper):
         if self.top_down:
             mask = np.array([0.0] * 2 + [1.0] * (out['observation'].shape[0] - 2))
             out['observation'] = out['observation'] * mask
-        return out, reward, done, info
+        return out, reward, done, False, info
 
-    def reset(self):
+    def reset(self, **kwargs):
         if self.fix_goal:
             self.goal = self.fix_goal_xy
         else:

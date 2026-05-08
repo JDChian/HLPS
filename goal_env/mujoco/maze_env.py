@@ -225,10 +225,13 @@ class MazeEnv(gym.Env):
                 raise Exception("Every geom of the torso must have a name "
                                 "defined")
 
-        _, file_path = tempfile.mkstemp(text=True, suffix='.xml')
-        tree.write(file_path)
+        fd, file_path = tempfile.mkstemp(text=True, suffix='.xml')
+        os.close(fd)
+        with open(file_path, "wb") as f:
+            tree.write(f)
 
         self.wrapped_env = model_cls(*args, file_path=file_path, **kwargs)
+        os.remove(file_path)
         self.args = args
         self.kwargs = kwargs
         self.visualize_goal = True
@@ -468,13 +471,15 @@ class MazeEnv(gym.Env):
                 if 'name' not in geom.attrib:
                     raise Exception("Every geom of the torso must have a name "
                                     "defined")
-            _, file_path = tempfile.mkstemp(text=True, suffix='.xml')
-            self.tree.write(
-                file_path)  # here we write a temporal file with the robot specifications. Why not the original one??
+            fd, file_path = tempfile.mkstemp(text=True, suffix='.xml')
+            os.close(fd)
+            with open(file_path, "wb") as f:
+                self.tree.write(f)  # here we write a temporal file with the robot specifications. Why not the original one??
 
             model_cls = self.__class__.MODEL_CLASS
             self.wrapped_env = model_cls(*self.args, file_path=file_path,
                                          **self.kwargs)  # file to the robot specifications; model_cls is AntEnv
+            os.remove(file_path)
 
         self.t = 0
         self.trajectory = []
@@ -588,7 +593,7 @@ class MazeEnv(gym.Env):
 
         if self._manual_collision:
             old_pos = self.wrapped_env.get_xy()
-            inner_next_obs, inner_reward, done, info = self.wrapped_env.step(
+            inner_next_obs, inner_reward, done, _, info = self.wrapped_env.step(
                 action)
             new_pos = self.wrapped_env.get_xy()
 
@@ -604,7 +609,7 @@ class MazeEnv(gym.Env):
                 if self._is_in_collision(new_pos):
                     self.wrapped_env.set_xy(old_pos)
         else:
-            inner_next_obs, inner_reward, done, info = self.wrapped_env.step(
+            inner_next_obs, inner_reward, done, _, info = self.wrapped_env.step(
                 action)
         next_obs = self._get_obs()
         done = False
@@ -612,4 +617,4 @@ class MazeEnv(gym.Env):
             # print(self.EPS, next_obs[:2], self.GOAL[:2])
             done = bool(((next_obs[:2] - self.GOAL[:2]) ** 2).sum() < self.EPS)
             inner_reward = int(done)
-        return next_obs, inner_reward, done, info
+        return next_obs, inner_reward, done, False, info

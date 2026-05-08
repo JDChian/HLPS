@@ -230,4 +230,4 @@ if __name__ == '__main__':
             except:
                 continue
 
-        obs, reward, _, _ = env.step(act)
+        obs, reward, _, _, _ = env.step(act)

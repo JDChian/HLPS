@@ -14,7 +14,7 @@ def get_args_ant():
     parser.add_argument('--algo-name', type=str, default='HLPS', help='the algorithm name')
     parser.add_argument('--env-name', type=str, default='AntMaze1-v1', help='the environment name')
     parser.add_argument('--test', type=str, default='AntMaze1Test-v1')
-    parser.add_argument('--n-epochs', type=int, default=10000, help='the number of epochs to train the agent')
+    parser.add_argument('--n-epochs', type=int, default=6, help='the number of epochs to train the agent')
     parser.add_argument('--n-batches', type=int, default=200, help='the times to update the network')
     parser.add_argument('--seed', type=int, default=125, help='random seed')
 
@@ -54,11 +54,11 @@ def get_args_ant():
 
     # add for hier policy
     parser.add_argument('--plot', type=bool, default=False, help='plot subgoals')
-    parser.add_argument('--save', type=bool, default=False, help='save model')
+    parser.add_argument('--save', action='store_true', default=True, help='save model')
     parser.add_argument('--save_tb', type=bool, default=False, help='save tensorboard data')
     parser.add_argument('--animate', type=bool, default=False)
     parser.add_argument("--eval", type=bool, default=False)
-    parser.add_argument('--eval_interval', type=int, default=50, help="every n episodes to eval once")
+    parser.add_argument('--eval_interval', type=int, default=5, help="every n episodes to eval once")
     parser.add_argument('--c', type=int, default=50, help="interval of high-level action")
     parser.add_argument('--gradient_flow', type=bool, default=False, help='end-to-end learn feature and policy')
     parser.add_argument('--gradient_flow_value', type=bool, default=False, help='slow feature as a embedding of value function')

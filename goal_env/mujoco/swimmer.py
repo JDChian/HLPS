@@ -5,11 +5,23 @@ from gym.envs.mujoco import mujoco_env
 class SwimmerEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     ORI_IND = 2
     FILE = "swimmer.xml"
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+        ],
+        "render_fps": 25,
+    }
     def __init__(self, file_path=None, expose_all_qpos=True):
         self._expose_all_qpos = expose_all_qpos
         self.add_noise = False
 
-        mujoco_env.MujocoEnv.__init__(self, file_path, 4)
+        from gym import spaces
+        import numpy as np
+        mujoco_env.MujocoEnv.__init__(self, file_path, 4, observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
+        obs = self._get_obs()
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=obs.shape, dtype=np.float32)
         utils.EzPickle.__init__(self)
 
     def _step(self, a):
@@ -24,7 +36,7 @@ class SwimmerEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward_ctrl = - ctrl_cost_coeff * np.square(a).sum()
         reward = reward_fwd + reward_ctrl
         ob = self._get_obs()
-        return ob, reward, False, dict(reward_fwd=reward_fwd, reward_ctrl=reward_ctrl)
+        return ob, reward, False, False, dict(reward_fwd=reward_fwd, reward_ctrl=reward_ctrl)
 
     def _get_obs(self):
         qpos = self.sim.data.qpos

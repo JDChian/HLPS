@@ -62,7 +62,7 @@ class GoalPlane(gym.Env):
 
     def step(self, action):
         assert self.goal is not None
-        observation, reward, done, info = self.env.step(np.array(action) / self.maze_size)  # normalize action
+        observation, reward, done, _, info = self.env.step(np.array(action) / self.maze_size)  # normalize action
         observation = np.array(observation) * self.maze_size
 
         out = {'observation': observation,

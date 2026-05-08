@@ -9,12 +9,24 @@ from gym.envs.mujoco import mujoco_env
 class PointEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     FILE = "point.xml"
     ORI_IND = 2
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+        ],
+        "render_fps": 50, # 1 / dt = 1 / 0.02 = 50. dt is computed inside MujocoEnv. But actually it expects 1/dt based on frame_skip.
+    }
 
     def __init__(self, file_path=None, expose_all_qpos=True):
         self._expose_all_qpos = expose_all_qpos
         self.add_noise = False
 
-        mujoco_env.MujocoEnv.__init__(self, file_path, 1)
+        from gym import spaces
+        import numpy as np
+        mujoco_env.MujocoEnv.__init__(self, file_path, 1, observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
+        obs = self._get_obs()
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=obs.shape, dtype=np.float32)
         utils.EzPickle.__init__(self)
 
     @property
@@ -43,7 +55,7 @@ class PointEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = 0
         done = False
         info = {}
-        return next_obs, reward, done, info
+        return next_obs, reward, done, False, info
 
     def _get_obs(self):
         if self._expose_all_qpos:
@@ -60,7 +72,7 @@ class PointEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_model(self):
         qpos = self.init_qpos + self.np_random.uniform(
             size=self.model.nq, low=-.1, high=.1)
-        qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
+        qvel = self.init_qvel + self.np_random.standard_normal(self.model.nv) * .1
 
         # Set everything other than point to original position and 0 velocity.
         qpos[3:] = self.init_qpos[3:]

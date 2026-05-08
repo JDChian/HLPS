@@ -46,7 +46,7 @@ def play(env, policy, video_path="tmp.avi", time_limit=500, device='cpu'):
                 action = action.detach().cpu().numpy()
         else:
             action = policy(np.array(obs)[None]).action[0].detach().cpu().numpy()
-        obs, rew, done, info = env.step(action)
+        obs, rew, done, _, info = env.step(action)
         if done:
             obs = env.reset()
         num += 1

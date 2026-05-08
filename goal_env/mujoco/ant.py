@@ -36,6 +36,14 @@ def q_mult(a, b):  # multiply two quaternion
 class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     FILE = "ant.xml"
     ORI_IND = 3
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+        ],
+        "render_fps": 5,
+    }
 
     def __init__(self, file_path=None, expose_all_qpos=True,
                  expose_body_coms=None, expose_body_comvels=None, noisy_init=True):
@@ -48,7 +56,10 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.full_obs = False
         self.add_noise = False
 
-        mujoco_env.MujocoEnv.__init__(self, file_path, 10)
+        from gym import spaces
+        mujoco_env.MujocoEnv.__init__(self, file_path, 10, observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32))
+        obs = self._get_obs()
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=obs.shape, dtype=np.float32)
         utils.EzPickle.__init__(self)
 
     @property
@@ -69,7 +80,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         state = self.state_vector()
         done = False
         ob = self._get_obs()
-        return ob, reward, done, dict(
+        return ob, reward, done, False, dict(
             reward_forward=forward_reward,
             reward_ctrl=-ctrl_cost,
             reward_survive=survive_reward)
@@ -119,7 +130,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.noisy_init:
             qpos = self.init_qpos + self.np_random.uniform(
                 size=self.model.nq, low=-.1, high=.1)
-            qvel = self.init_qvel + self.np_random.randn(self.model.nv) * .1
+            qvel = self.init_qvel + self.np_random.standard_normal(self.model.nv) * .1
         else:
             qpos = self.init_qpos
             qvel = self.init_qvel
