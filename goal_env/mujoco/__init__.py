@@ -1,21 +1,23 @@
 from gym.envs.registration import register
 import sys
 
-print("path", sys.argv[0].split('/')[-1], "!!!")
-if sys.argv[0].split('/')[-1].split('\\')[-1] in ["train.py", "test1.py", "-c"]:
-    from train import args
-else:
-    raise Exception("Unknown main file !!!")
+def _flag_enabled(flag_name):
+    prefix = flag_name + "="
+    for arg in sys.argv[1:]:
+        lowered = arg.lower()
+        if lowered == flag_name:
+            return True
+        if lowered.startswith(prefix):
+            value = lowered.split("=", 1)[1]
+            return value in {"1", "true", "yes", "y"}
+    return False
 
 robots = ['Point', 'Ant', 'Swimmer']
 task_types = ['Maze', 'Maze1', 'Maze2', 'Push', 'Fall', 'Block', 'BlockMaze']
 all_name = [x + y for x in robots for y in task_types]
 random_start = False
 
-if args.image:
-    top_down = True
-else:
-    top_down = False
+top_down = _flag_enabled("--image")
 
 for name_t in all_name:
     # episode length

@@ -93,6 +93,7 @@ runs/
 prev_runs/
 saved_models/
 results/
+visualizations/
 *.log
 *.jpg
 venv/
