@@ -6,13 +6,14 @@ from scipy.linalg import expm
 from scipy.spatial.distance import cdist
 import shutil
 import torch
+from tqdm import tqdm
 
 from algos.hlps import hlps_agent
 from arguments.arguments_hlps import get_args_ant
 from goal_env.mujoco import *
 
 
-beta = 0.00005
+beta = 0.0005
 
 
 def plot_subgoal_frame(
@@ -59,14 +60,13 @@ def main():
     args = get_args_ant()
     args.eval = True
     args.resume = True
-    args.resume_path = 'saved_models\AntMaze1-v1_HLPS_Seed_125_May07_04-37-50'
     args.resume_epoch = 0
     args.device = 'cpu'
     args.animate = False
 
     # Create environment
-    env = gym.make(args.env_name, max_episode_steps=10000)
-    test_env = gym.make(args.test, max_episode_steps=env._max_episode_steps)
+    env = gym.make(args.env_name)
+    test_env = gym.make(args.test)
     def get_env_params(env):
         obs = env.reset()
         params = {'obs': obs['observation'].shape[0], 'goal': obs['desired_goal'].shape[0],
@@ -95,10 +95,12 @@ def main():
     SIGMA = SIGMA_0        # (2, 2)
     
     # ==================================================
-    visualize_trajectory = False
+    visualize_trajectory = True
     visualize_relationship = True
     visualization_dir = 'visualizations'
-    num_episodes = 100
+    num_episodes = 10
+    use_abs_range = False
+    SUBGOAL_RANGE = 200.0
     # ==================================================
     
     # Create directory
@@ -120,7 +122,9 @@ def main():
         num_subgoal = 0
         trajectory = []
         
-        for step in range(env_params['max_test_timesteps']):
+        is_success = False
+
+        for step in tqdm(range(env_params['max_test_timesteps']), desc=f'Episode {episode}'):
             """
             Step 3: s' ~ P ( · | s , a )
             """
@@ -152,9 +156,9 @@ def main():
                         )
                     
                     if terminated:
-                        print(f'✅ Episode {episode} SUCCESS at step {step}')
+                        is_success = True
                     else:
-                        print(f'❌ Episode {episode} FAIL at step {step}')
+                        is_success = False
                     
                     break
 
@@ -204,11 +208,14 @@ def main():
                     # Compute new subgoal and its uncertainty
                     if args.old_sample:
                         absolute_subgoal = hi_agent_output
-                        subgoal = absolute_subgoal                                                # (2,)
+                        subgoal = absolute_subgoal                                                    # (2,)
                     else:
                         relative_subgoal = hi_agent_output
-                        subgoal = np.clip(Z + relative_subgoal, -args.abs_range, args.abs_range)  # (2,)
-                    variance = float(SIGMA[0, 0])                                                 # (1,)
+                        if use_abs_range:
+                            subgoal = np.clip(Z + relative_subgoal, -args.abs_range, args.abs_range)  # (2,)
+                        else:
+                            subgoal = np.clip(Z + relative_subgoal, -SUBGOAL_RANGE, SUBGOAL_RANGE)    # (2,)
+                    variance = float(SIGMA[0, 0])                                                     # (1,)
 
                 """
                 Step 2: a ~ pi^l ( · | s , g_sub )
@@ -218,13 +225,17 @@ def main():
                     torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(sac_trainer.device),
                     torch.tensor(subgoal, dtype=torch.float32).unsqueeze(0).to(sac_trainer.device)
                 )
+            
+        if is_success:
+            print(f'✅ Episode {episode} SUCCESS')
+        else:
+            print(f'❌ Episode {episode} FAIL')
     
     print(f"Final Success Rate: {num_success}/{num_episodes} = {num_success/num_episodes:.2f}")
 
     # Plot variance and distance relationship
     if visualize_relationship:
         unc_arr = np.array(all_subgoal_variances) / (np.array(all_subgoal_variances) + beta)
-        unc_arr = np.log(unc_arr + 1) / np.log(1.1)  # log base 2
         dist_arr = np.array(all_subgoal_distances)
 
         plt.figure(figsize=(12, 5))
