@@ -34,6 +34,8 @@ for name_t in all_name:
                 fix_goal = True
             else:
                 fix_goal = False
+        if _flag_enabled("--fix-goal"):
+            fix_goal = True
         goal_args = [[-5, -5], [5, 5]]
 
         register(

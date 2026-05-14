@@ -53,7 +53,7 @@ class GoalWrapper(Wrapper):
         self.fix_goal = fix_goal
         print("fix goal", self.fix_goal)
         contain_g = [1 if "g" in row else 0 for row in self.env.MAZE_STRUCTURE]
-        if 1 in contain_g and self.fix_goal and test == "Test": #this is test-v1
+        if 1 in contain_g and self.fix_goal and test in ["", "Test"]: #this is test-v1
             row = contain_g.index(1)
             col = self.env.MAZE_STRUCTURE[row].index("g")
             y = (row - row_r) * self.maze_size_scaling

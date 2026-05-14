@@ -58,7 +58,7 @@ def get_args_ant():
     parser.add_argument('--save_tb', type=bool, default=False, help='save tensorboard data')
     parser.add_argument('--animate', type=bool, default=False)
     parser.add_argument("--eval", type=bool, default=False)
-    parser.add_argument('--eval_interval', type=int, default=250, help="every n episodes to eval once")
+    parser.add_argument('--eval_interval', type=int, default=100, help="every n episodes to eval once")
     parser.add_argument('--c', type=int, default=50, help="interval of high-level action")
     parser.add_argument('--gradient_flow', type=bool, default=False, help='end-to-end learn feature and policy')
     parser.add_argument('--gradient_flow_value', type=bool, default=False, help='slow feature as a embedding of value function')
@@ -70,6 +70,7 @@ def get_args_ant():
     parser.add_argument("--start_update_phi", type=int, default=10, help='use prediction error to learn feature')
     parser.add_argument("--image", type=bool, default=False, help='use image input')
     parser.add_argument("--old_sample", type=bool, default=False, help='sample the absolute goal in the abs_range')
+    parser.add_argument("--fix-goal", action='store_true', help='if set, use a fixed goal during training instead of sampling randomly')
 
     # args of sac
     parser.add_argument('--policy', default="Gaussian",
