@@ -71,6 +71,7 @@ def get_args_ant():
     parser.add_argument("--image", type=bool, default=False, help='use image input')
     parser.add_argument("--old_sample", type=bool, default=False, help='sample the absolute goal in the abs_range')
     parser.add_argument("--fix-goal", action='store_true', help='if set, use a fixed goal during training instead of sampling randomly')
+    parser.add_argument("--no-subgoal", action='store_true', help='if set, use final goal instead of subgoal for low-level policy')
 
     # args of sac
     parser.add_argument('--policy', default="Gaussian",

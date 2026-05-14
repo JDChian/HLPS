@@ -22,6 +22,7 @@ import seaborn as sns
 sns.set_color_codes()
 import pandas as pd
 from scipy.linalg import expm
+from tqdm import tqdm
 
 
 SUBGOAL_RANGE = 200.0
@@ -133,7 +134,11 @@ class hlps_agent:
             print("log_dir: ", self.log_dir)
 
         # init low-level network
-        self.real_goal_dim = self.hi_act_space.shape[0]  # low-level goal space and high-level action space
+        if getattr(self.args, 'no_subgoal', False):
+            self.real_goal_dim = env_params['goal']
+        else:
+            self.real_goal_dim = self.hi_act_space.shape[0]  # low-level goal space and high-level action space
+            
         self.init_network()
         # init high-level agent
         self.hi_agent = SAC(self.hi_dim + env_params['goal'], self.hi_act_space, args, False, env_params['goal'],
@@ -211,8 +216,7 @@ class hlps_agent:
     def learn(self):
         output_data = {"frames": [], "reward": [], "dist": []}
 
-        for epoch in range(self.start_epoch, self.args.n_epochs):
-            print("Epoch: ", epoch, "Furthest task: ", self.furthest_task)
+        for epoch in tqdm(range(self.start_epoch, self.args.n_epochs), desc="Training"):
             if epoch > 0 and epoch % self.args.lr_decay_actor == 0:
                 self.adjust_lr_actor(epoch)
             if epoch > 0 and epoch % self.args.lr_decay_critic == 0:
@@ -292,10 +296,15 @@ class hlps_agent:
                     if len(self.hi_buffer) > self.args.batch_size:
                         self.update_hi(epoch)
                 with torch.no_grad():
-                    if self.not_train_low:
-                        action = self.test_policy(act_obs[:, :self.low_dim], hi_action_tensor)
+                    if getattr(self.args, 'no_subgoal', False):
+                        action_target = torch.tensor(g, dtype=torch.float32).unsqueeze(0).to(self.device)
                     else:
-                        action = self.explore_policy(act_obs[:, :self.low_dim], hi_action_tensor)
+                        action_target = hi_action_tensor
+                        
+                    if self.not_train_low:
+                        action = self.test_policy(act_obs[:, :self.low_dim], action_target)
+                    else:
+                        action = self.explore_policy(act_obs[:, :self.low_dim], action_target)
                 # feed the actions into the environment
                 observation_new, r, terminated, truncated, info = self.env.step(action)
                 done = terminated or truncated
@@ -338,7 +347,10 @@ class hlps_agent:
                 # append rollouts
                 ep_obs.append(obs[:self.low_dim].copy())
                 ep_ag.append(ag_Z.copy())
-                ep_g.append(hi_action_for_low.copy())
+                if getattr(self.args, 'no_subgoal', False):
+                    ep_g.append(g.copy())
+                else:
+                    ep_g.append(hi_action_for_low.copy())
                 ep_actions.append(action.copy())
                 # re-assign the observation
                 obs = obs_new
@@ -634,7 +646,12 @@ class hlps_agent:
                             new_hi_action = np.clip(new_hi_action, -SUBGOAL_RANGE, SUBGOAL_RANGE)
 
                         hi_action_tensor = torch.tensor(new_hi_action, dtype=torch.float32).unsqueeze(0).to(self.device)
-                    action = self.test_policy(act_obs[:, :self.low_dim], hi_action_tensor)
+                    
+                    if getattr(self.args, 'no_subgoal', False):
+                        action_target = torch.tensor(g, dtype=torch.float32).unsqueeze(0).to(self.device)
+                    else:
+                        action_target = hi_action_tensor
+                    action = self.test_policy(act_obs[:, :self.low_dim], action_target)
 
                 observation_new, rew, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
