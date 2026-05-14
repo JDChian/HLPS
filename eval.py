@@ -1,4 +1,5 @@
 import gym
+import imageio
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -13,14 +14,12 @@ from arguments.arguments_hlps import get_args_ant
 from goal_env.mujoco import *
 
 
-beta = 0.0005
-
-
 def plot_subgoal_frame(
         start_pos, end_pos,
         subgoal_pos, variance,
         trajectory, current_state,
-        visualization_subdir, num_subgoal
+        visualization_subdir, num_subgoal,
+        beta
     ):
 
     plt.figure(figsize=(8, 8))
@@ -55,23 +54,43 @@ def plot_subgoal_frame(
     plt.close()
 
 
+def plot_relationship(
+        variances, distances,
+        visualization_dir,
+        beta
+    ):
+    unc_arr = np.array(variances) / (np.array(variances) + beta)
+    dist_arr = np.array(distances)
+    plt.figure(figsize=(12, 5))
+    plt.xlim(0, 1)
+    plt.ylim(0, 40)
+    plt.scatter(unc_arr, dist_arr, alpha=0.7)
+    plt.xlabel('Uncertainty')
+    plt.ylabel('Distance')
+    plt.title(f'Relationship between Subgoal Uncertainties and Distances')
+    plt.savefig(f"{visualization_dir}/relationship.png")
+    plt.close()
+
+
 def main():
     # Get arguments
     args = get_args_ant()
     args.eval = True
     args.resume = True
     args.resume_epoch = 0
-    args.device = 'cpu'
-    args.animate = False
+    args.device = 'cuda'
+    args.animate = True
 
     # Create environment
     env = gym.make(args.env_name)
     test_env = gym.make(args.test)
+    env.env.env.visualize_goal = args.animate
+    test_env.env.env.visualize_goal = args.animate
     def get_env_params(env):
         obs = env.reset()
         params = {'obs': obs['observation'].shape[0], 'goal': obs['desired_goal'].shape[0],
-                'action': env.action_space.shape[0], 'action_max': env.action_space.high[0],
-                'max_timesteps': env._max_episode_steps}
+                  'action': env.action_space.shape[0], 'action_max': env.action_space.high[0],
+                  'max_timesteps': env._max_episode_steps}
         return params
     env_params = get_env_params(env)
     env_params['max_test_timesteps'] = test_env._max_episode_steps
@@ -95,39 +114,62 @@ def main():
     SIGMA = SIGMA_0        # (2, 2)
     
     # ==================================================
-    visualize_trajectory = True
-    visualize_relationship = True
-    visualization_dir = 'visualizations'
+    log_file_needed = True
+    visualize_relationship_image = True
+    visualize_subgoal_image = True
+    visualize_trajectory_video = True
+    
     num_episodes = 10
+    
     use_abs_range = False
     SUBGOAL_RANGE = 200.0
+    
+    beta = 0.0005
     # ==================================================
     
     # Create directory
-    if visualize_trajectory or visualize_relationship:
-        if os.path.exists(visualization_dir):
-            shutil.rmtree(visualization_dir)
-        os.makedirs(visualization_dir, exist_ok=True)
+    visualization_dir = os.path.join('visualizations', f"{args.env_name}")
+    if os.path.exists(visualization_dir):
+        shutil.rmtree(visualization_dir)
+    os.makedirs(visualization_dir, exist_ok=True)
 
-    num_success = 0
-    all_subgoal_variances = []
-    all_subgoal_distances = []
+    # Create log file
+    if log_file_needed:
+        log_path = os.path.join(visualization_dir, 'episode_results.txt')
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write("Evaluation Results\n")
+            f.write("="*30 + "\n")
+
+    # For computing success rate
+    if log_file_needed:
+        num_success = 0
+    # For plotting variance-distance relationship
+    if visualize_relationship_image:
+        all_subgoal_variances = []
+        all_subgoal_distances = []
 
     for episode in range(1, num_episodes + 1):
         # Create sub-directory
-        if visualize_trajectory:
+        if visualize_subgoal_image:
             visualization_subdir = os.path.join(visualization_dir, f'episode_{episode:03d}')
             os.makedirs(visualization_subdir, exist_ok=True)
         
-        num_subgoal = 0
-        trajectory = []
-        
-        is_success = False
+        # For computing success rate
+        if log_file_needed:
+            is_success = False
+        # For saving video frames
+        if visualize_trajectory_video:
+            frames = []
+        # For plotting trajectory
+        if visualize_subgoal_image:
+            num_subgoal = 0
+            trajectory = []
 
         for step in tqdm(range(env_params['max_test_timesteps']), desc=f'Episode {episode}'):
             """
             Step 3: s' ~ P ( · | s , a )
             """
+            # Update state
             if step == 0:
                 observation = test_env.reset()
                 state = observation['observation']  # (29,)
@@ -138,29 +180,32 @@ def main():
                 observation, rew, terminated, truncated, info = test_env.step(action)
                 prev_state = state.copy()           # (29,)
                 state = observation['observation']  # (29,)
+            
+            # Record on each step
+            if visualize_trajectory_video:
+                test_env.unwrapped.wrapped_env.render_mode = 'rgb_array'
+                frame = test_env.render()
+                frames.append(frame)
+            if visualize_subgoal_image:
+                trajectory.append(state[:2].copy())
 
-            trajectory.append(state[:2].copy())
-
-            if step != 0:
-                if terminated or truncated:
+            # Record on termination
+            if step != 0 and terminated:
+                if log_file_needed:
                     num_success += 1
+                    is_success = True
+                if visualize_relationship_image:
                     all_subgoal_variances.append(variance)
                     all_subgoal_distances.append(np.linalg.norm(state[:2] - subgoal))
-                    
-                    if visualize_trajectory:
-                        plot_subgoal_frame(
-                            initial_state, goal,
-                            subgoal, variance,
-                            trajectory, state[:2],
-                            visualization_subdir, num_subgoal
-                        )
-                    
-                    if terminated:
-                        is_success = True
-                    else:
-                        is_success = False
-                    
-                    break
+                if visualize_subgoal_image:
+                    plot_subgoal_frame(
+                        initial_state, goal,
+                        subgoal, variance,
+                        trajectory, state[:2],
+                        visualization_subdir, num_subgoal,
+                        beta
+                    )
+                break
 
             with torch.no_grad():
                 """
@@ -183,24 +228,22 @@ def main():
                 Z = MU[0]  # (2,)
 
                 # Sample a subgoal every c steps
-                condition = step % sac_trainer.c == 0  # Default value of sac_trainer.c is 50
-                # condition = step % 100 == 0
-                # condition = step == 0 or np.linalg.norm(state[:2] - subgoal) <= 5
-                if condition:
+                if step % sac_trainer.c == 0:
                     # Record old subgoal
                     if step != 0:
-                        all_subgoal_variances.append(variance)
-                        all_subgoal_distances.append(np.linalg.norm(state[:2] - subgoal))
-                        
-                        if visualize_trajectory:
+                        if visualize_relationship_image:
+                            all_subgoal_variances.append(variance)
+                            all_subgoal_distances.append(np.linalg.norm(state[:2] - subgoal))
+                        if visualize_subgoal_image:
                             plot_subgoal_frame(
                                 initial_state, goal,
                                 subgoal, variance,
                                 trajectory, state[:2],
-                                visualization_subdir, num_subgoal
+                                visualization_subdir, num_subgoal,
+                                beta
                             )
-                        num_subgoal += 1
-                        trajectory = []
+                            num_subgoal += 1
+                            trajectory = []
 
                     # High-level policy: generate relative subgoal
                     hi_agent_output = sac_trainer.hi_agent.select_action(np.concatenate((state, goal)), evaluate=True)  # (2,)
@@ -226,27 +269,39 @@ def main():
                     torch.tensor(subgoal, dtype=torch.float32).unsqueeze(0).to(sac_trainer.device)
                 )
             
-        if is_success:
-            print(f'✅ Episode {episode} SUCCESS')
-        else:
-            print(f'❌ Episode {episode} FAIL')
+        # Log episode result
+        if log_file_needed:
+            if is_success:
+                msg = f'✅ Episode {episode} SUCCESS'
+                print(msg)
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(msg + "\n")
+            else:
+                msg = f'❌ Episode {episode} FAIL'
+                print(msg)
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(msg + "\n")
+
+        # Save video
+        if visualize_subgoal_image:
+            video_path = os.path.join(visualization_subdir, 'trajectory_video.mp4')
+            imageio.mimsave(video_path, frames, fps=30)
     
-    print(f"Final Success Rate: {num_success}/{num_episodes} = {num_success/num_episodes:.2f}")
+    # Log final success rate
+    if log_file_needed:
+        msg = f"Final Success Rate: {num_success}/{num_episodes} = {num_success/num_episodes:.2f}"
+        print(msg)
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write("="*30 + "\n")
+            f.write(msg + "\n")
 
     # Plot variance and distance relationship
-    if visualize_relationship:
-        unc_arr = np.array(all_subgoal_variances) / (np.array(all_subgoal_variances) + beta)
-        dist_arr = np.array(all_subgoal_distances)
-
-        plt.figure(figsize=(12, 5))
-        plt.xlim(0, 1)
-        plt.ylim(0, 40)
-        plt.scatter(unc_arr, dist_arr, alpha=0.7)
-        plt.xlabel('Uncertainty')
-        plt.ylabel('Distance')
-        plt.title(f'Relationship between Subgoal Uncertainties and Distances')
-        plt.savefig(f"{visualization_dir}/relationship.png")
-        plt.close()
+    if visualize_relationship_image:
+        plot_relationship(
+            all_subgoal_variances, all_subgoal_distances,
+            visualization_dir,
+            beta
+        )
 
 
 if __name__ == "__main__":
