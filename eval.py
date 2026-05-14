@@ -75,6 +75,7 @@ def plot_relationship(
 def main():
     # Get arguments
     args = get_args_ant()
+    args.save = False
     args.eval = True
     args.resume = True
     args.resume_epoch = 0
