@@ -16,8 +16,9 @@ from goal_env.mujoco import *
 
 def plot_subgoal_frame(
         start_pos, end_pos,
-        subgoal_pos, variance,
         trajectory, current_state,
+        subgoal_pos, variance,
+        latent_trajectory, latent_current_state,
         visualization_subdir, num_subgoal,
         beta
     ):
@@ -40,6 +41,14 @@ def plot_subgoal_frame(
     if traj_arr.ndim == 2 and len(traj_arr) > 0:
         plt.plot(traj_arr[:, 0], traj_arr[:, 1], c='gray', alpha=0.6, label='Trajectory')
     
+    # Latent Trajectory
+    if latent_trajectory is not None:
+        latent_traj_arr = np.array(latent_trajectory)
+        if latent_traj_arr.ndim == 2 and len(latent_traj_arr) > 0:
+            plt.plot(latent_traj_arr[:, 0], latent_traj_arr[:, 1], c='purple', alpha=0.6, linestyle='--', label='Latent Trajectory')
+        if latent_current_state is not None:
+            plt.scatter(latent_current_state[0], latent_current_state[1], c='purple', s=80, label='Latent Current State', marker='^')
+
     # 5. Current State (End of this subgoal's execution)
     plt.scatter(current_state[0], current_state[1], c='orange', s=80, label='Current State')
     
@@ -110,10 +119,7 @@ def main():
     SIGMA_0 = np.array([[GAMMA_SQUARE, 0], [0, GAMMA_SQUARE * LAMBDA ** 2]])  # (2, 2)
     H = np.array([[1], [0]])                                                  # (2, 1)
 
-    # Kalman filter initialization
-    MU = np.zeros((2, 2))  # (2, 2)
-    SIGMA = SIGMA_0        # (2, 2)
-    
+
     # ==================================================
     log_file_needed = True
     visualize_relationship_image = True
@@ -125,7 +131,7 @@ def main():
     use_abs_range = False
     SUBGOAL_RANGE = 200.0
     
-    beta = 0.0005
+    beta = 0.005
     # ==================================================
     
     # Create directory
@@ -165,6 +171,7 @@ def main():
         if visualize_subgoal_image:
             num_subgoal = 0
             trajectory = []
+            latent_trajectory = []
 
         for step in tqdm(range(env_params['max_test_timesteps']), desc=f'Episode {episode}'):
             """
@@ -177,6 +184,10 @@ def main():
                 prev_state = state.copy()           # (29,)
                 initial_state = state[:2].copy()    # (2,)
                 goal = observation['desired_goal']  # (2,)
+                
+                # Reset Kalman filter for the new episode
+                MU = np.zeros((2, 2))   # (2, 2)
+                SIGMA = SIGMA_0.copy()  # (2, 2)
             else:
                 observation, rew, terminated, truncated, info = test_env.step(action)
                 prev_state = state.copy()           # (29,)
@@ -197,12 +208,13 @@ def main():
                     is_success = True
                 if visualize_relationship_image:
                     all_subgoal_variances.append(variance)
-                    all_subgoal_distances.append(np.linalg.norm(state[:2] - subgoal))
+                    all_subgoal_distances.append(np.linalg.norm(Z - subgoal))
                 if visualize_subgoal_image:
                     plot_subgoal_frame(
                         initial_state, goal,
-                        subgoal, variance,
                         trajectory, state[:2],
+                        subgoal, variance,
+                        latent_trajectory, Z if 'Z' in locals() else None,
                         visualization_subdir, num_subgoal,
                         beta
                     )
@@ -213,9 +225,8 @@ def main():
                 Step 1: g_sub ~ pi^h ( · | s , g )
                 """
                 # Kalman filter variables
-                S = np.stack([prev_state, state], axis=0)                                                             # (2, 29)
                 F = sac_trainer.representation(torch.Tensor(state).to(sac_trainer.device)).detach().cpu().numpy()[0]  # (2,)
-                DELTA_S = cdist(S, S)                                                                                 # (2, 2)
+                DELTA_S = np.linalg.norm(state - prev_state)                                                          # scalar
                 PSI = expm(A * DELTA_S)                                                                               # (2, 2)
                 
                 # Kalman filter update
@@ -227,6 +238,10 @@ def main():
 
                 # Extract state in subgoal space representation
                 Z = MU[0]  # (2,)
+                
+                # Record on each step
+                if visualize_subgoal_image:
+                    latent_trajectory.append(Z.copy())
 
                 # Sample a subgoal every c steps
                 if step % sac_trainer.c == 0:
@@ -234,17 +249,19 @@ def main():
                     if step != 0:
                         if visualize_relationship_image:
                             all_subgoal_variances.append(variance)
-                            all_subgoal_distances.append(np.linalg.norm(state[:2] - subgoal))
+                            all_subgoal_distances.append(np.linalg.norm(Z - subgoal))
                         if visualize_subgoal_image:
                             plot_subgoal_frame(
                                 initial_state, goal,
-                                subgoal, variance,
                                 trajectory, state[:2],
+                                subgoal, variance,
+                                latent_trajectory, Z,
                                 visualization_subdir, num_subgoal,
                                 beta
                             )
                             num_subgoal += 1
                             trajectory = []
+                            latent_trajectory = []
 
                     # High-level policy: generate relative subgoal
                     hi_agent_output = sac_trainer.hi_agent.select_action(np.concatenate((state, goal)), evaluate=True)  # (2,)
