@@ -176,13 +176,8 @@ class replay_buffer_energy:
         # calculate energy
         if self.env_name[:5] == 'Fetch':
             g, m, delta_t = 9.81, 1, 0.04
-            if self.env_name[:9] == 'FetchPush':
+            if self.env_name[:9] == 'FetchPush' or buffers['ag'].shape[2] < 3:
                 potential_energy = 0.
-            else:
-                height = buffers['ag'][:, :, 2]
-                height_0 = np.repeat(height[:, 0].reshape(-1, 1), height[:, 1::].shape[1], axis=1)
-                height = height[:, 1::] - height_0
-                potential_energy = g * m * height
             diff = np.diff(buffers['ag'], axis=1)
             velocity = diff / delta_t
             kinetic_energy = 0.5 * m * np.power(velocity, 2)

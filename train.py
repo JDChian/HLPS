@@ -1,5 +1,6 @@
 import numpy as np
 import gym
+import gym_robotics
 from arguments.arguments_hlps import get_args_ant, get_args_chain
 from algos.hlps import hlps_agent
 from goal_env.mujoco import *
@@ -8,8 +9,9 @@ import torch
 
 
 def get_env_params(env):
-    obs = env.reset()
-    # close the environment
+    reset_out = env.reset()
+    # Handle both old gym API (returns obs dict) and new gym API (returns (obs, info) tuple)
+    obs = reset_out[0] if isinstance(reset_out, tuple) else reset_out
     params = {'obs': obs['observation'].shape[0], 'goal': obs['desired_goal'].shape[0],
               'action': env.action_space.shape[0], 'action_max': env.action_space.high[0],
               'max_timesteps': env._max_episode_steps}

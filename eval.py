@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from scipy.linalg import expm
-from scipy.spatial.distance import cdist
 import shutil
 import torch
 from tqdm import tqdm
@@ -118,7 +117,6 @@ def main():
     A = np.array([[0, 1], [-LAMBDA ** 2, -2 * LAMBDA]])                       # (2, 2)
     SIGMA_0 = np.array([[GAMMA_SQUARE, 0], [0, GAMMA_SQUARE * LAMBDA ** 2]])  # (2, 2)
     H = np.array([[1], [0]])                                                  # (2, 1)
-
 
     # ==================================================
     log_file_needed = True

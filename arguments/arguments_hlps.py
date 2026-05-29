@@ -14,7 +14,7 @@ def get_args_ant():
     parser.add_argument('--algo-name', type=str, default='HLPS', help='the algorithm name')
     parser.add_argument('--env-name', type=str, default='AntMaze1-v1', help='the environment name')
     parser.add_argument('--test', type=str, default='AntMaze1Test-v1')
-    parser.add_argument('--n-epochs', type=int, default=5000, help='the number of epochs to train the agent')
+    parser.add_argument('--n-epochs', type=int, default=10000, help='the number of epochs to train the agent')
     parser.add_argument('--n-batches', type=int, default=200, help='the times to update the network')
     parser.add_argument('--seed', type=int, default=125, help='random seed')
 

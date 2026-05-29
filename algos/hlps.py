@@ -57,7 +57,11 @@ class hlps_agent:
         self.feature_reg = 0.0  # feature l2 regularization
         print("abs_range", abs_range)
 
-        self.hi_act_space = self.env.env.maze_space
+        # maze_space only exists on custom maze envs; Fetch envs use a Box over the full obs space
+        if hasattr(self.env.env, 'maze_space'):
+            self.hi_act_space = self.env.env.maze_space
+        else:
+            self.hi_act_space = self.env.observation_space['observation']
 
         if self.learn_goal_space:
             self.hi_act_space = gym.spaces.Box(low=np.array([-abs_range, -abs_range]), high=np.array([abs_range, abs_range]))
@@ -77,7 +81,7 @@ class hlps_agent:
         else:
             self.low_forward = False
             assert self.low_use_clip is False
-        self.hi_sparse = (self.env.env.reward_type == "sparse")
+        self.hi_sparse = (getattr(self.env.env, 'reward_type', 'sparse') == "sparse")
 
         # # params of learning phi
         resume_phi = args.resume
@@ -173,7 +177,7 @@ class hlps_agent:
         self.sync_target()
 
         if hasattr(self.env.env, 'env'):
-            self.animate = self.env.env.env.visualize_goal
+            self.animate = getattr(self.env.env.env, 'visualize_goal', self.args.animate)
         else:
             self.animate = self.args.animate
         self.distance_threshold = self.args.distance
@@ -225,7 +229,8 @@ class hlps_agent:
             ep_obs, ep_ag, ep_g, ep_actions, ep_latents, ep_fullobs = [], [], [], [], [], []
             last_hi_obs = None
             success = 0
-            observation = self.env.reset()
+            _reset_out = self.env.reset()
+            observation = _reset_out[0] if isinstance(_reset_out, tuple) else _reset_out
             obs = observation['observation']
             ag = observation['achieved_goal'][:self.real_goal_dim]
             g = observation['desired_goal']
@@ -382,7 +387,11 @@ class hlps_agent:
             mb_ag = np.array([ep_ag])
             mb_g = np.array([ep_g])
             mb_actions = np.array([ep_actions])
-            self.low_buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions, success, False])
+            # replay_buffer_energy (used for Fetch envs) only takes 4 args; replay_buffer takes 6
+            if isinstance(self.low_buffer, replay_buffer_energy):
+                self.low_buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
+            else:
+                self.low_buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions, success, False])
 
             # update low-level
             if not self.not_train_low:
@@ -585,7 +594,8 @@ class hlps_agent:
         discount_reward = np.zeros(n_test_rollouts)
         for roll in range(n_test_rollouts):
             per_success_rate = []
-            observation = env.reset()
+            _reset_out = env.reset()
+            observation = _reset_out[0] if isinstance(_reset_out, tuple) else _reset_out
             obs = observation['observation']
             g = observation['desired_goal']
             ep_latents = []
@@ -779,7 +789,8 @@ class hlps_agent:
             episode_num = self.low_buffer.current_size
             obs_array = self.low_buffer.buffers['obs'][:episode_num]
             episode_idxs = np.random.randint(0, episode_num, batch_size)
-            t_samples = np.random.randint(self.env_params['max_timesteps'] - self.k - self.delta_k, size=batch_size)
+            t_sample_high = max(1, self.env_params['max_timesteps'] - self.k - self.delta_k)
+            t_samples = np.random.randint(t_sample_high, size=batch_size)
             if self.delta_k > 0:
                 delta = np.random.randint(self.delta_k, size=batch_size)
             else:
